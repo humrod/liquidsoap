@@ -181,10 +181,12 @@ val add_operator :
   descr:string ->
   ?flags:doc_flag list ->
   ?active:bool ->
+  ?method_t:(string * scheme) list ->
+  ?meth:(string * ((< Source.source ; .. > as 'a) -> value)) list ->
   string ->
   proto ->
   return_t:t ->
-  (env -> Source.source) ->
+  (env -> 'a) ->
   unit
 
 (** {2 Manipulation of values} *)

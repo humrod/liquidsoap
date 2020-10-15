@@ -313,45 +313,54 @@ let string_of_category x =
   * and at this point the type might still not be known completely
   * so we have to force its value withing the acceptable range. *)
 
-let add_operator ~category ~descr ?(flags = []) ?(active = false) name proto
-    ~return_t f =
-  let compare (x, _, _, _) (y, _, _, _) =
-    match (x, y) with
-      | "", "" -> 0
-      | _, "" -> -1
-      | "", _ -> 1
-      | x, y -> Stdlib.compare x y
-  in
-  let proto =
-    let t = T.make (T.Ground T.String) in
-    ( "id",
-      t,
-      Some { pos = t.T.pos; value = Ground (String "") },
-      Some "Force the value of the source ID." )
-    :: List.stable_sort compare proto
-  in
-  let f env =
-    let src : Source.source = f env in
-    let id =
-      match (List.assoc "id" env).value with
-        | Ground (String s) -> s
-        | _ -> assert false
+let add_operator =
+  let _method_t = method_t in
+  let _meth = meth in
+  fun ~category ~descr ?(flags = []) ?(active = false) ?method_t ?meth name
+      proto ~return_t f ->
+    let compare (x, _, _, _) (y, _, _, _) =
+      match (x, y) with
+        | "", "" -> 0
+        | _, "" -> -1
+        | "", _ -> 1
+        | x, y -> Stdlib.compare x y
     in
-    if id <> "" then src#set_id id;
-    { pos = None; value = Source src }
-  in
-  let f env =
-    let pos = None in
-    try f env with
-      | Source.Clock_conflict (a, b) ->
-          raise (Lang_errors.Clock_conflict (pos, a, b))
-      | Source.Clock_loop (a, b) -> raise (Lang_errors.Clock_loop (pos, a, b))
-      | Source.Kind.Conflict (a, b) ->
-          raise (Lang_errors.Kind_conflict (pos, a, b))
-  in
-  let return_t = Term.source_t ~active return_t in
-  let category = string_of_category category in
-  add_builtin ~category ~descr ~flags name proto return_t f
+    let proto =
+      let t = T.make (T.Ground T.String) in
+      ( "id",
+        t,
+        Some { pos = t.T.pos; value = Ground (String "") },
+        Some "Force the value of the source ID." )
+      :: List.stable_sort compare proto
+    in
+    let f env =
+      let src : < Source.source ; .. > = f env in
+      let id =
+        match (List.assoc "id" env).value with
+          | Ground (String s) -> s
+          | _ -> assert false
+      in
+      if id <> "" then src#set_id id;
+      let v = source (src :> Source.source) in
+      match meth with
+        | None -> v
+        | Some m -> _meth v (List.map (fun (name, fn) -> (name, fn src)) m)
+    in
+    let f env =
+      let pos = None in
+      try f env with
+        | Source.Clock_conflict (a, b) ->
+            raise (Lang_errors.Clock_conflict (pos, a, b))
+        | Source.Clock_loop (a, b) -> raise (Lang_errors.Clock_loop (pos, a, b))
+        | Source.Kind.Conflict (a, b) ->
+            raise (Lang_errors.Kind_conflict (pos, a, b))
+    in
+    let return_t = Term.source_t ~active return_t in
+    let return_t =
+      match method_t with None -> return_t | Some m -> _method_t return_t m
+    in
+    let category = string_of_category category in
+    add_builtin ~category ~descr ~flags name proto return_t f
 
 (** List of references for which iter_sources had to give up --- see below. *)
 let static_analysis_failed = ref []
